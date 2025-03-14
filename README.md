@@ -21,7 +21,7 @@ A high-performance **rate-limiting service** built with **Go, Redis, and Postgre
 
 ### **1️⃣ Clone the Repository**
 ```sh
-git clone https://github.com/YOUR_GITHUB_USERNAME/limitify.git
+git clone https://github.com/Maniteja0126/Limitify.git
 cd limitify
 ```
 
