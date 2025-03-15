@@ -30,7 +30,7 @@ func ConnectDB(){
 
 
 func MigrateDatabase(){
-	DB.AutoMigrate(&models.User{} , &models.RateLimit{} , &models.RequestLog{})
+	DB.AutoMigrate(&models.User{} , &models.RateLimit{} , &models.RequestLog{} , &models.APIKey{})
 
 	fmt.Println("Database migration completed")
 
