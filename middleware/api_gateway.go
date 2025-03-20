@@ -3,16 +3,15 @@ package middleware
 import (
 	"limitify/config"
 	"limitify/models"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
-	"log"
+
 	"github.com/gin-gonic/gin"
 )
-
-
 
 func APIGateway() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -45,8 +44,8 @@ func APIGateway() gin.HandlerFunc {
 		}
 
 		originalPath := c.Request.URL.Path
-		forwardPath := strings.TrimPrefix(originalPath, "/api") 
-		forwardPath = strings.TrimLeft(forwardPath, "/")      
+		forwardPath := strings.TrimPrefix(originalPath, "/api")
+		forwardPath = strings.TrimLeft(forwardPath, "/")
 
 		if !strings.HasSuffix(backendURL, "/") {
 			backendURL += "/"
@@ -64,32 +63,40 @@ func APIGateway() gin.HandlerFunc {
 
 		proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			config.RedisClient.Incr(config.Ctx, failureKey)
+			config.RedisClient.Expire(config.Ctx, failureKey, time.Hour)
+
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to reach backend service"})
+		}
+
 		proxy.Director = func(req *http.Request) {
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host
-			req.URL.Path = "/" + forwardPath 
-		
+			req.URL.Path = "/" + forwardPath
+
 			authHeader := c.GetHeader("Authorization")
 			if authHeader != "" {
 				req.Header.Set("Authorization", authHeader)
 			}
-		
+
 			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 			req.Header.Set("Accept", "application/json")
 			req.Header.Set("Referer", "https://yourdomain.com")
 			req.Header.Set("Cache-Control", "no-cache")
 			req.Header.Set("Connection", "close")
 			req.Header.Set("X-Forwarded-For", c.ClientIP())
-		
+
 			req.Header.Del("X-API-Key")
-	
+
 		}
-		
-		
 
 		proxy.ModifyResponse = func(res *http.Response) error {
 			if res.StatusCode >= 500 {
 				log.Printf("Upstream service error: %d", res.StatusCode)
+				config.RedisClient.Incr(config.Ctx, failureKey)
+				config.RedisClient.Expire(config.Ctx, failureKey, time.Hour)
 			}
 			return nil
 		}
